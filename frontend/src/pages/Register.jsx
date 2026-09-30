@@ -1,14 +1,32 @@
+import { useState } from 'react'
 import { LockOutlined, UserAddOutlined } from '@ant-design/icons'
 import { Button, Form, Input, Typography, message } from 'antd'
+import axios from 'axios'
 import { Link, useNavigate } from 'react-router-dom'
 import './Login.css'
 
 export default function Register() {
   const navigate = useNavigate()
+  const [submitting, setSubmitting] = useState(false)
 
-  const onFinish = () => {
-    message.success('注册成功，请登录')
-    navigate('/login')
+  const onFinish = async (values) => {
+    const username = values.username.trim()
+    const password = values.password
+
+    setSubmitting(true)
+    try {
+      await axios.post('http://localhost:5000/api/register', {
+        username,
+        password,
+      })
+      message.success('注册成功，请登录')
+      navigate('/login')
+    } catch (error) {
+      const text = error.response?.data?.message || '注册失败，请确认后端已启动'
+      message.error(text)
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -38,9 +56,6 @@ export default function Register() {
                   const name = typeof value === 'string' ? value.trim() : ''
                   if (!name) {
                     return Promise.reject(new Error('请输入用户名'))
-                  }
-                  if (name.length < 6) {
-                    return Promise.reject(new Error('用户名至少 6 位'))
                   }
                   return Promise.resolve()
                 },
@@ -91,7 +106,7 @@ export default function Register() {
             />
           </Form.Item>
           <Form.Item style={{ marginBottom: 12 }}>
-            <Button type="primary" htmlType="submit" size="large" block>
+            <Button type="primary" htmlType="submit" size="large" block loading={submitting}>
               注册
             </Button>
           </Form.Item>
