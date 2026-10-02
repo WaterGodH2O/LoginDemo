@@ -1,24 +1,33 @@
+import { useState } from 'react'
 import { LockOutlined, UserOutlined } from '@ant-design/icons'
 import { Button, Form, Input, Typography, message } from 'antd'
+import axios from 'axios'
 import { Link, useNavigate } from 'react-router-dom'
 import './Login.css'
 
 export default function Login() {
   const navigate = useNavigate()
+  const [submitting, setSubmitting] = useState(false)
 
-  const onFinish = (values) => {
+  const onFinish = async (values) => {
     const username = values.username.trim()
+    const password = values.password
 
-    // 校验通过后向后端 POST 登录请求，由服务器核对账号密码。
-    // 请求体：{ username, password }
-    // username 为去掉首尾空格后的用户名；password 为输入框原值 values.password，不去空格。
-    // 核对成功后再提示并跳转；失败则留在登录页显示错误。
-    // 明文传输先用着，后面再改。
-
-
-    message.success(`欢迎回来，${username}`)
-    
-    navigate('/home', { state: { username } })
+    setSubmitting(true)
+    try {
+      const res = await axios.post('http://localhost:5000/api/login', {
+        username,
+        password,
+      })
+      const name = res.data.username || username
+      message.success(res.data.message || `欢迎回来，${name}`)
+      navigate('/home', { state: { username: name } })
+    } catch (error) {
+      const text = error.response?.data?.message || '登录失败，请确认后端已启动'
+      message.error(text)
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -49,9 +58,6 @@ export default function Login() {
                   if (!name) {
                     return Promise.reject(new Error('请输入用户名'))
                   }
-                  if (name.length < 6) {
-                    return Promise.reject(new Error('用户名至少 6 位'))
-                  }
                   return Promise.resolve()
                 },
               },
@@ -60,7 +66,7 @@ export default function Login() {
             <Input
               size="large"
               prefix={<UserOutlined />}
-              placeholder="至少 6 位"
+              placeholder="请输入用户名"
               allowClear
               autoComplete="username"
             />
@@ -78,7 +84,7 @@ export default function Login() {
             />
           </Form.Item>
           <Form.Item style={{ marginBottom: 12 }}>
-            <Button type="primary" htmlType="submit" size="large" block>
+            <Button type="primary" htmlType="submit" size="large" block loading={submitting}>
               登录
             </Button>
           </Form.Item>

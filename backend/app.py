@@ -95,9 +95,13 @@ def login():
         (account["username"],),
     ).fetchone()
     if row is None or row["password"] != account["password"]:
-        return jsonify(message="用户名或密码错误"), 401
+        return jsonify(ok=False, message="用户名或密码错误"), 401
 
-    return jsonify(message="登录成功", username=account["username"])
+    return jsonify(
+        ok=True,
+        message="登录成功",
+        username=account["username"],
+    )
 
 
 if __name__ == "__main__":
