@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { LockOutlined, UserAddOutlined } from '@ant-design/icons'
 import { Button, Form, Input, Typography, message } from 'antd'
-import axios from 'axios'
 import { Link, useNavigate } from 'react-router-dom'
+import api from '../api.js'
 import './Login.css'
 
 export default function Register() {
@@ -15,7 +15,7 @@ export default function Register() {
 
     setSubmitting(true)
     try {
-      await axios.post('http://localhost:5000/api/register', {
+      await api.post('/api/register', {
         username,
         password,
       })
@@ -70,6 +70,7 @@ export default function Register() {
               autoComplete="username"
             />
           </Form.Item>
+
           <Form.Item
             label="密码"
             name="password"

@@ -1,15 +1,22 @@
 import sqlite3
+from datetime import datetime
 from pathlib import Path
 
-from flask import Flask, g, jsonify, request
+from flask import Flask, g, jsonify, request, session
 from flask_cors import CORS
 
 BASE_DIR = Path(__file__).resolve().parent
 DB_PATH = BASE_DIR / "app.db"
 
 app = Flask(__name__)
+app.secret_key = "demo-secret-key"
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["SESSION_COOKIE_SECURE"] = False
+
 CORS(
     app,
+    supports_credentials=True,
     resources={r"/api/*": {"origins": ["http://localhost:5173", "http://localhost:5174"]}},
 )
 
@@ -97,11 +104,31 @@ def login():
     if row is None or row["password"] != account["password"]:
         return jsonify(ok=False, message="用户名或密码错误"), 401
 
+    session["username"] = account["username"]
+    session["logged_in_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     return jsonify(
         ok=True,
         message="登录成功",
         username=account["username"],
     )
+
+
+@app.get("/api/me")
+def me():
+    username = session.get("username")
+    if not username:
+        return jsonify(ok=False, message="未登录"), 401
+    return jsonify(
+        ok=True,
+        username=username,
+        loggedInAt=session.get("logged_in_at", ""),
+    )
+
+
+@app.post("/api/logout")
+def logout():
+    session.clear()
+    return jsonify(ok=True, message="已退出")
 
 
 if __name__ == "__main__":

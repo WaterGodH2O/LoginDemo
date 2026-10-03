@@ -1,0 +1,23 @@
+.home-page {
+  width: min(640px, 100%);
+}
+
+.home-panel {
+  padding: 8px 0 24px;
+}
+
+.home-title {
+  margin-bottom: 4px !important;
+}
+
+.home-desc {
+  margin-bottom: 24px !important;
+}
+
+.home-empty {
+  margin: 32px 0 24px;
+  padding: 24px 0;
+  border: 1px dashed #e5e7eb;
+  border-radius: 12px;
+  background: #fafafa;
+}

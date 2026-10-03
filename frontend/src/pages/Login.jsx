@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { LockOutlined, UserOutlined } from '@ant-design/icons'
 import { Button, Form, Input, Typography, message } from 'antd'
-import axios from 'axios'
 import { Link, useNavigate } from 'react-router-dom'
+import api from '../api.js'
 import './Login.css'
 
 export default function Login() {
@@ -15,13 +15,13 @@ export default function Login() {
 
     setSubmitting(true)
     try {
-      const res = await axios.post('http://localhost:5000/api/login', {
+      const res = await api.post('/api/login', {
         username,
         password,
       })
       const name = res.data.username || username
       message.success(res.data.message || `欢迎回来，${name}`)
-      navigate('/home', { state: { username: name } })
+      navigate('/home')
     } catch (error) {
       const text = error.response?.data?.message || '登录失败，请确认后端已启动'
       message.error(text)
