@@ -31,13 +31,13 @@ export default function App() {
   // 测试时暂时总是保留顶栏，方便切换页面
 
 
-  // if (location.pathname === '/login') {
-  //   return <Login />
-  // }
+  if (location.pathname === '/login') {
+    return <Login />
+  }
 
-  // if (location.pathname === '/register') {
-  //   return <Register />
-  // }
+  if (location.pathname === '/register') {
+    return <Register />
+  }
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -57,7 +57,6 @@ export default function App() {
       <Content style={{ padding: 32, maxWidth: 720 }}>
         <Typography.Paragraph type="secondary">
           当前路径：<strong>{location.pathname}</strong>
-          （切换组件，页面没有刷新）
         </Typography.Paragraph>
         <Routes>
           <Route path="/home" element={<Home />} />

@@ -1,6 +1,7 @@
-# 根目录只追踪 frontend 与 backend
+# 根目录只追踪 frontend、backend 与 docs
 /*
 
 !/frontend/
 !/backend/
+!/docs/
 !/.gitignore
