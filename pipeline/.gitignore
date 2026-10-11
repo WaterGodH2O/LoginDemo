@@ -1,0 +1,5 @@
+work/
+.env
+__pycache__/
+*.pyc
+example/last-result.png
