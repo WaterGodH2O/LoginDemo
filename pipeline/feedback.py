@@ -5,7 +5,7 @@
 # 输出：一条用户消息。预期原文来自用例，实际结果来自页面或接口执行。
 #
 # 通过的用例只保留编号和「通过」。失败项带上脚本或请求、退出码、截图和输出摘录。
-# 消息末尾要求回复第一行只能是「决定：继续定位」或「决定：输出结论」。
+# 消息末尾只接受「决定：输出结论」。页面脚本只执行一次，不再要求继续定位。
 # 末尾附上已有执行记录、测试报告和 Bug 单原文，只作版式示例。
 # 本机前端 http://localhost:5173 ，账号服务 http://localhost:5000。
 # 页面脚本目录 pipeline/work/ui/ ，截图目录 pipeline/work/screenshots/。
@@ -15,7 +15,7 @@ from __future__ import annotations
 from api_run import ApiResult
 from config import Config
 from doc_examples import BUG, RECORD, REPORT
-from loop import DECIDE_CONCLUDE, DECIDE_LOCATE
+from loop import DECIDE_CONCLUDE
 from ui_run import UiResult
 
 _EXCERPT = 1200
@@ -120,24 +120,16 @@ def _footer(cfg: Config, force_conclude: bool, force_reason: str) -> str:
             "实际结果写出上面的执行结果。",
         ]
     )
-    if force_conclude:
-        lead = force_reason or f"请输出结论。回复的第一行只能是「{DECIDE_CONCLUDE}」。"
-        extra = "没有失败时不要写 Bug 单。" if "全部用例已通过" in lead else "请给出失败需求对应的 Bug 单。"
-        return "\n".join(
-            [
-                lead,
-                f"回复的第一行只能是「{DECIDE_CONCLUDE}」。",
-                "随后按分隔行给出文档：",
-                docs,
-                extra,
-            ]
-        )
+    del force_conclude
+    lead = force_reason or f"请输出结论。回复的第一行只能是「{DECIDE_CONCLUDE}」。"
+    extra = "没有失败时不要写 Bug 单。" if "全部用例已通过" in (force_reason or "") else "请给出失败需求对应的 Bug 单。"
     return "\n".join(
         [
-            "请只做一件事：继续写 Playwright 脚本以缩小失败位置，或给出最终文档。",
-            "继续定位时，断言仍使用上面的预期原文。后面只放新的页面脚本。",
-            f"回复的第一行只能是「{DECIDE_LOCATE}」或「{DECIDE_CONCLUDE}」。",
-            "若输出结论，按分隔行给出：",
+            "每个页面用例的 Playwright 脚本只执行一次。不要再写脚本，不要继续定位。",
+            lead,
+            f"回复的第一行只能是「{DECIDE_CONCLUDE}」。",
+            "随后按分隔行给出文档：",
             docs,
+            extra,
         ]
     )

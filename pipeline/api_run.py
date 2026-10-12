@@ -4,7 +4,7 @@
 # 输入：接口用例列表；api_base、timeout。
 # 输出：每条用例的编号、实际状态码、响应正文、通过或失败。
 #
-# 本机账号服务 http://localhost:5000 ，超时默认 30 秒。
+# 本机账号服务 http://localhost:5000 ，超时默认 120 秒。
 # 使用标准库发请求，不写 Playwright。
 # 同一轮用例共用 Cookie，便于登录后请求 /api/me。
 

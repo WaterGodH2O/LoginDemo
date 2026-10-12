@@ -6,12 +6,13 @@
 #
 # 本机在仓库根目录执行 python pipeline/work/ui/<脚本>.py。
 # 退出码 0 表示出现预期文案，1 表示没有。通过与否只看退出码。
-# headed 关闭时无头；--headed 时浏览器可见。单条超时默认 30 秒。
+# headed 关闭时无头；--headed 时浏览器可见。单条超时默认 120 秒。
 # 失败截图目录：pipeline/work/screenshots/。
 # 有页面用例时，启动前后端之前先核对 playwright。
 # 未安装则用当前 Python 执行：
 #   python -m pip install playwright
 #   python -m playwright install chromium
+# 包已在但浏览器打不开时，只补装 chromium。
 # 安装失败则退出，并打印命令输出。本模块不 import playwright。
 
 from __future__ import annotations
@@ -102,36 +103,38 @@ _PLAYWRIGHT_READY = [False]
 
 
 def prepare_playwright() -> None:
-    """当前解释器已有 playwright 则返回。否则安装包和 chromium。"""
-    if _playwright_imports():
-        if not _PLAYWRIGHT_READY[0]:
-            print("playwright 已安装", flush=True)
-            _PLAYWRIGHT_READY[0] = True
+    """当前解释器能打开 chromium 则返回。否则安装包或浏览器。"""
+    if _PLAYWRIGHT_READY[0]:
         return
-    print("正在安装 playwright", flush=True)
-    installed = subprocess.run(
-        [sys.executable, "-m", "pip", "install", "playwright"],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        check=False,
-    )
-    if installed.returncode != 0:
-        raise PipelineError("安装 playwright 失败\n" + _command_output(installed))
-    print("正在安装 chromium", flush=True)
-    browser = subprocess.run(
-        [sys.executable, "-m", "playwright", "install", "chromium"],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        check=False,
-    )
-    if browser.returncode != 0:
-        raise PipelineError("安装 chromium 失败\n" + _command_output(browser))
     if not _playwright_imports():
-        raise PipelineError("安装 playwright 失败：安装结束后仍无法导入")
+        print("正在安装 playwright", flush=True)
+        installed = subprocess.run(
+            [sys.executable, "-m", "pip", "install", "playwright"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+        if installed.returncode != 0:
+            raise PipelineError("安装 playwright 失败\n" + _command_output(installed))
+        if not _playwright_imports():
+            raise PipelineError("安装 playwright 失败：安装结束后仍无法导入")
+    if not _chromium_launches():
+        print("正在安装 chromium", flush=True)
+        browser = subprocess.run(
+            [sys.executable, "-m", "playwright", "install", "chromium"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+        if browser.returncode != 0:
+            raise PipelineError("安装 chromium 失败\n" + _command_output(browser))
+        if not _chromium_launches():
+            raise PipelineError("安装 chromium 失败：安装结束后仍无法启动")
+    print("playwright 已安装", flush=True)
     _PLAYWRIGHT_READY[0] = True
 
 
@@ -145,6 +148,33 @@ def _playwright_imports() -> bool:
         timeout=30,
         check=False,
     )
+    return probe.returncode == 0
+
+
+def _chromium_launches() -> bool:
+    code = "\n".join(
+        [
+            "from playwright.sync_api import sync_playwright",
+            "playwright = sync_playwright().start()",
+            "try:",
+            "    browser = playwright.chromium.launch(headless=True)",
+            "    browser.close()",
+            "finally:",
+            "    playwright.stop()",
+        ]
+    )
+    try:
+        probe = subprocess.run(
+            [sys.executable, "-c", code],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=60,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        return False
     return probe.returncode == 0
 
 

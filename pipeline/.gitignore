@@ -1,5 +1,6 @@
 work/
 .env
+新建文本文档.txt
 __pycache__/
 *.pyc
 example/last-result.png

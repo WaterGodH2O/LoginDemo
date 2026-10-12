@@ -1,8 +1,8 @@
 # 测试流水线
 #
 # 本地 Python 脚本。把工程目录、前后端代码和项目文档打包成对话文本，交给大模型。
-# 模型先写出测试用例和 Playwright 脚本。脚本再启动前后端并执行。
-# 执行结果送回模型。模型继续写脚本以定位缺陷，或直接写出执行记录、测试报告和 Bug 单。
+# 模型先根据 PRD 写出需求规格说明书，再根据该说明书写测试用例和 Playwright 脚本。
+# 脚本再启动前后端并执行。执行结果送回模型，由模型写出执行记录、测试报告和 Bug 单。
 #
 # 不做成浏览器插件或编辑器扩展。
 # 脚本不修改 frontend/ 和 backend/，也不补上用户名长度校验。
@@ -12,6 +12,8 @@
 # python pipeline/run.py --source frontend --source backend
 # 必须传入完整的项目前后端代码。PRD 使用默认路径时可以不传 --prd，文件缺失则停止。
 # 大模型密钥用环境变量提供，不放进命令行。
+# 读入源码之前先发一条测试对话，确认密钥和模型可用。
+# 探测和后续对话覆盖写入工作目录 dialogue.log，不写密钥。
 
 
 # 全链路
@@ -49,30 +51,33 @@
 #    ...文件原文...
 #    ```
 #
-#    请根据 PRD 和源码生成测试用例，并为每条页面用例生成 Playwright Python 脚本。
-#    页面用例的断言必须使用 PRD 中的预期原文。
-#    接口用例写入测试用例末尾的 JSON，不要写成 Playwright。
+#    请根据 PRD 生成需求规格说明书。通过后再根据该说明书写测试用例和 Playwright 脚本。
+#    「」里只放页面短提示。脚本字符串写入该用例的这些短提示，不要写成别的编号。
+#    接口用例只写在测试用例文件末尾的 JSON，不要写成 Playwright，也不要插在用例中间。
 #
-# 2. 模型第一次输出
-#    此时还没有运行结果，模型只输出测试用例和页面脚本。
+# 2. 模型先写需求规格说明书，再写测试用例和页面脚本
+#    第一轮只输出需求规格说明书，格式对齐 docs/srs/登录注册Demo-需求规格说明书.md。
+#    落盘到 AIgen-docs/需求规格说明书.md。缺编号或字段时交回重写。
+#    第二轮把这份说明书送回模型，只输出测试用例和页面脚本。
 #    不在这一步输出测试执行记录、测试报告或 Bug 单。
+#    先写完测试用例，再写完全部页面脚本，然后结束。
 #
 #    回复用分隔行标出每个文件，便于脚本切分落盘：
 #
-#    ===== docs/testcases/测试用例.md =====
-#    ...Markdown...
+#    ===== AIgen-docs/需求规格说明书.md =====
+#    ...每条需求一个四级标题和字段表格...
+#    ===== AIgen-docs/测试用例.md =====
+#    ...表格对齐 docs/testcases，json 代码块在该文件最后...
 #    ===== pipeline/work/ui/test_tc_ui_reg_002.py =====
-#    ...Playwright Python...
+#    ...该文件的字符串是「用户名长度不足」，不是「请输入用户名」或「注册成功」...
 #
-#    测试用例.md 记录编号、所属需求、通道（ui 或 api）、步骤、数据和预期原文。
-#    长度规则至少包含「去掉首尾空格后不足 6 位应拒绝」和「刚好 6 位可以注册」。
-#    文件末尾附一个 json 代码块，供脚本执行接口用例，字段为：
+#    测试用例.md 用表格记录对应需求、测试方式（手工或接口）、步骤和预期。
+#    文件末尾一个 json 代码块，字段为：
 #    id、requirement、channel、method、path、body、expected_status、expected_text。
 #
-#    页面用例每个文件对应一条用例，使用 Playwright 同步 Python API。
-#    写盘前检查：脚本能被 Python 编译；断言包含该用例的预期原文；
-#    不包含跳过测试，也不把失败用例改成断言「注册成功」。
-#    检查不通过则把原因交回模型重新生成，次数见 --codegen-retries。
+#    每个页面用例恰好一个脚本。文件名为 test_ 加编号小写，连字符改下划线。
+#    写盘前检查：脚本能被 Python 编译；字符串包含该用例「」中的提示原文；
+#    不包含跳过测试。检查不通过则把原因交回模型重新生成，次数见 --codegen-retries。
 #
 # 3. 启动系统并执行
 #    账号服务未监听 --api-base 时，脚本启动 python backend/app.py（默认端口 5000）。
@@ -108,15 +113,10 @@
 #    输出摘录：
 #    ...pytest 或 HTTP 响应原文，过长则截断...
 #
-#    请只做一件事：继续写 Playwright 脚本以缩小失败位置，或给出最终文档。
-#    继续定位时，断言仍使用上面的预期原文。
-#    回复的第一行只能是「决定：继续定位」或「决定：输出结论」。
+#    每个页面用例只执行一次。回复的第一行只能是「决定：输出结论」。
+#    不要再写 Playwright，也不要继续定位。
 #
-# 4. 模型根据反馈继续
-#    第一行是「决定：继续定位」时，后面只给新的 Playwright 文件，格式同第 2 步的分隔行。
-#    脚本检查并执行后，把新的【执行结果】再送回模型。
-#    定位轮数不超过 --locate-rounds。用尽后，下一轮只允许「决定：输出结论」。
-#
+# 4. 模型根据这一次执行结果直接写结论
 #    第一行是「决定：输出结论」时，后面按分隔行给出三份文档，脚本落盘：
 #
 #    ===== docs/test-records/测试执行记录.md =====
@@ -174,16 +174,21 @@
 #                     模型名称。
 # --codegen-retries   默认 3
 #                     页面脚本未通过写盘前检查时，交回模型重新生成的次数。
-# --locate-rounds     默认 2
-#                     第 4 步「决定：继续定位」的最多轮数。用尽后只接受「决定：输出结论」。
-# --timeout           默认 30
+# --locate-rounds     默认 7
+#                     保留参数。页面脚本现在每个用例只执行一次，不再按这个轮数重跑。
+# --timeout           默认 120
 #                     单次 HTTP 请求或单条页面用例的超时秒数。
+# --max-tokens        默认 16384
+#                     单次模型回复的最大 token 数。不能超过所用模型的输出上限。
 # --headed            默认关闭
 #                     加上后显示浏览器窗口。
 # --work-dir          默认 pipeline/work
 #                     Playwright 脚本、截图和本轮执行结果。
 # --dry-run           默认关闭
-#                     只做到第 2 步并落盘测试用例和页面脚本，不启动 Demo，不写后三份文档。
+#                     只做到规格说明书和测试用例落盘，不启动 Demo，不写后三份文档。
+# --verbose           默认关闭
+#                     只控制终端：回显发给模型的消息，并按文件回显模型回复的用例、脚本和结论文档。
+#                     对话日志不依赖本开关，默认覆盖写入工作目录 dialogue.log。
 
 
 # 环境变量
@@ -195,8 +200,10 @@
 
 # 产出
 #
-# docs/testcases/测试用例.md                         第 2 步，模型生成
+# AIgen-docs/需求规格说明书.md                       第 2 步，模型根据 PRD 生成
+# AIgen-docs/测试用例.md                             第 2 步，模型根据规格说明书生成
 # pipeline/work/ui/*.py                              第 2 步和第 4 步，Playwright 脚本
+# pipeline/work/dialogue.log                         每次运行覆盖，探测、用户消息和模型回复
 # pipeline/work/screenshots/                         第 3 步，失败截图
 # docs/test-records/测试执行记录.md                  第 4 步，决定输出结论时
 # docs/test-reports/测试报告.md                      第 4 步，决定输出结论时
@@ -242,13 +249,21 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _run(cfg: config.Config) -> int:
+    llm.reset_dialogue_log(cfg)
+    llm.probe(cfg)
     files = collect.collect(cfg)
+    first = prompt.first_message(files, cfg)
+    _echo_to_model(cfg, "规格说明书", first)
     messages = [
         llm.system_message(),
-        {"role": "user", "content": prompt.first_message(files, cfg)},
+        {"role": "user", "content": first},
     ]
+    _generate_srs(cfg, messages)
+    srs_text = (cfg.repo_root / loop.SRS_REL).read_text(encoding="utf-8")
+    _user(cfg, messages, "用例任务", prompt.cases_message(cfg, srs_text))
     parsed = _generate_cases(cfg, messages)
     if cfg.dry_run:
+        print(f"已写入 {cfg.docs_dir / '需求规格说明书.md'}")
         print(f"已写入 {cfg.docs_dir / '测试用例.md'}")
         return 0
     if parsed.ui_cases:
@@ -260,13 +275,50 @@ def _run(cfg: config.Config) -> int:
     return _follow_up(cfg, messages, parsed, ui_results, api_results)
 
 
-def _generate_cases(cfg: config.Config, messages: list[dict[str, str]]) -> cases.ParseResult:
-    """反复请模型给出用例和页面脚本，直到检查通过或次数用尽。"""
+def _generate_srs(cfg: config.Config, messages: list[dict[str, str]]) -> str:
+    """请模型根据 PRD 写出需求规格说明书，直到检查通过或次数用尽。"""
     left = cfg.codegen_retries
+    bonus = 4
+    previous_issues: int | None = None
     while True:
         reply = llm.complete(cfg, messages)
+        _echo_reply(cfg, reply)
         messages.append({"role": "assistant", "content": reply})
-        written = split.apply(reply, "first", cfg)
+        written = split.apply(reply, "srs", cfg)
+        path = cfg.docs_dir / "需求规格说明书.md"
+        text = path.read_text(encoding="utf-8") if path.is_file() else ""
+        reason = written.reason
+        if written.ok:
+            if text.strip():
+                return text
+            reason = "需求规格说明书是空文件"
+        issues = _issue_count(reason)
+        improved = previous_issues is not None and issues < previous_issues
+        previous_issues = issues
+        if improved and bonus > 0:
+            bonus -= 1
+        else:
+            if left <= 0:
+                raise PipelineError(reason or "需求规格说明书未通过")
+            left -= 1
+        print(reason, flush=True)
+        _user(cfg, messages, "重发原因", prompt.srs_fix_message(reason))
+
+
+def _generate_cases(cfg: config.Config, messages: list[dict[str, str]]) -> cases.ParseResult:
+    """反复请模型给出用例和页面脚本，直到检查通过或次数用尽。"""
+    _clear_ui_scripts(cfg)
+    left = cfg.codegen_retries
+    bonus = 4
+    previous_issues: int | None = None
+    have_cases = False
+    while True:
+        reply = llm.complete(cfg, messages)
+        _echo_reply(cfg, reply)
+        messages.append({"role": "assistant", "content": reply})
+        written = split.apply(reply, "first", cfg, keep_cases=have_cases)
+        if f"{config.DOCS_DIR}/测试用例.md" in written.written:
+            have_cases = True
         reason = written.reason
         parsed = cases.parse(cfg) if written.ok else None
         if written.ok and parsed is not None and not parsed.ok:
@@ -278,10 +330,39 @@ def _generate_cases(cfg: config.Config, messages: list[dict[str, str]]) -> cases
                 reason = checked.reason
         if written.ok and parsed is not None and parsed.ok and checked is not None and checked.ok:
             return parsed
-        if left <= 0:
-            raise PipelineError(reason or "页面脚本检查未通过")
-        messages.append({"role": "user", "content": prompt.fix_message(reason)})
-        left -= 1
+        issues = _issue_count(reason)
+        improved = previous_issues is not None and issues < previous_issues
+        previous_issues = issues
+        if improved and bonus > 0:
+            bonus -= 1
+        else:
+            if left <= 0:
+                raise PipelineError(reason or "页面脚本检查未通过")
+            left -= 1
+        print(reason, flush=True)
+        script_gap = parsed is not None and not parsed.ok and _only_missing_scripts(parsed.reason)
+        assertion_gap = parsed is not None and parsed.ok and checked is not None and not checked.ok
+        scripts_only = bool(have_cases and (script_gap or assertion_gap))
+        _user(cfg, messages, "重发原因", prompt.fix_message(reason, scripts_only=scripts_only))
+
+
+def _issue_count(reason: str) -> int:
+    lines = [line.strip() for line in (reason or "").splitlines() if line.strip()]
+    return sum(1 for line in lines if not line.startswith("剩余重试次数"))
+
+
+def _only_missing_scripts(reason: str) -> bool:
+    lines = [line.strip() for line in (reason or "").splitlines() if line.strip()]
+    return bool(lines) and all("没有对应脚本" in line for line in lines)
+
+
+def _clear_ui_scripts(cfg: config.Config) -> None:
+    """新一轮生成前清掉旧页面脚本，避免编号对上过期文件。"""
+    ui = cfg.ui_dir
+    if not ui.is_dir():
+        return
+    for path in ui.glob("*.py"):
+        path.unlink()
 
 
 def _follow_up(
@@ -291,47 +372,36 @@ def _follow_up(
     ui_results: list[ui_run.UiResult],
     api_results: list[api_run.ApiResult],
 ) -> int:
-    """把执行结果送回模型，按决定继续定位或写出三份文档。"""
-    used = 0
+    """把一次执行结果送回模型，只写结论文档，不再重跑页面脚本。"""
+    del parsed
     left = cfg.codegen_retries
+    passed = _all_passed(ui_results, api_results)
     while True:
-        passed = _all_passed(ui_results, api_results)
-        force = passed or used >= cfg.locate_rounds
-        reason = "" if passed or used < cfg.locate_rounds else "定位轮数已用尽，只接受「决定：输出结论」"
-        messages.append(
-            {
-                "role": "user",
-                "content": feedback.build(ui_results, api_results, cfg, force, reason),
-            }
+        _user(
+            cfg,
+            messages,
+            "执行结果",
+            feedback.build(
+                ui_results,
+                api_results,
+                cfg,
+                True,
+                (
+                    "全部用例已通过。每个页面用例只执行一次。不要再写 Playwright 脚本。请直接输出结论。"
+                    if passed
+                    else "每个页面用例只执行一次。不要再写 Playwright 脚本。请根据上面的执行结果直接输出结论。"
+                ),
+            ),
         )
         reply = llm.complete(cfg, messages)
+        _echo_reply(cfg, reply)
         messages.append({"role": "assistant", "content": reply})
-        decision = loop.parse_decision(reply, passed, used, cfg.locate_rounds)
-        if decision.action == "invalid":
+        decision = loop.parse_decision(reply, passed, 0, cfg.locate_rounds, allow_locate=False)
+        if decision.action != "conclude":
             if left <= 0:
-                raise PipelineError(decision.message)
-            messages.append({"role": "user", "content": prompt.fix_message(decision.message)})
+                raise PipelineError(decision.message or "只接受「决定：输出结论」")
+            _user(cfg, messages, "重发原因", prompt.decision_fix_message(decision.message))
             left -= 1
-            continue
-        if decision.action == "locate":
-            located = split.apply(reply, "locate", cfg)
-            if not located.ok:
-                if left <= 0:
-                    raise PipelineError(located.reason)
-                messages.append({"role": "user", "content": prompt.fix_message(located.reason)})
-                left -= 1
-                continue
-            rerun = _cases_for_scripts(parsed.ui_cases, located.written)
-            checked = check_script.check(rerun, cfg, left)
-            if not checked.ok:
-                if left <= 0:
-                    raise PipelineError(checked.reason)
-                messages.append({"role": "user", "content": prompt.fix_message(checked.reason)})
-                left -= 1
-                continue
-            fresh = ui_run.run(rerun, cfg)
-            ui_results = _replace_ui(ui_results, fresh)
-            used += 1
             continue
         concluded = split.apply(reply, "conclude", cfg)
         gap = loop.conclusion_gap(
@@ -344,7 +414,8 @@ def _follow_up(
         if not concluded.ok or gap:
             if left <= 0:
                 raise PipelineError(gap or concluded.reason)
-            messages.append({"role": "user", "content": prompt.fix_message(gap or concluded.reason)})
+            print(gap or concluded.reason, flush=True)
+            _user(cfg, messages, "重发原因", prompt.conclusion_fix_message(gap or concluded.reason))
             left -= 1
             continue
         for path in concluded.written:
@@ -352,19 +423,26 @@ def _follow_up(
         return 0
 
 
-def _cases_for_scripts(ui_cases: list[cases.UiCase], written: list[str]) -> list[cases.UiCase]:
-    names = {path.rsplit("/", 1)[-1] for path in written}
-    return [case for case in ui_cases if case.script.rsplit("/", 1)[-1] in names]
+def _echo_to_model(cfg: config.Config, title: str, text: str) -> None:
+    llm.write_dialogue(cfg, f"发给模型：{title}", text)
+    if not cfg.verbose:
+        return
+    print(f"======== 发给模型：{title} ========", flush=True)
+    body = (text or "").rstrip()
+    print(body if body else "（空消息）", flush=True)
+    print("======== 发送结束 ========", flush=True)
+    print(flush=True)
 
 
-def _replace_ui(
-    previous: list[ui_run.UiResult],
-    fresh: list[ui_run.UiResult],
-) -> list[ui_run.UiResult]:
-    by_id = {item.case_id: item for item in previous}
-    for item in fresh:
-        by_id[item.case_id] = item
-    return list(by_id.values())
+def _user(cfg: config.Config, messages: list[dict[str, str]], title: str, content: str) -> None:
+    _echo_to_model(cfg, title, content)
+    messages.append({"role": "user", "content": content})
+
+
+def _echo_reply(cfg: config.Config, reply: str) -> None:
+    llm.write_dialogue(cfg, "模型回复", reply)
+    if cfg.verbose:
+        split.echo(reply)
 
 
 def _all_passed(ui_results: list[ui_run.UiResult], api_results: list[api_run.ApiResult]) -> bool:

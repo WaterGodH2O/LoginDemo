@@ -1,8 +1,9 @@
 # 回复切分
 #
 # 职责：按 ===== 相对路径 ===== 把回复拆成文件并落盘。
-# 输入：回复字符串；阶段（首次、继续定位、输出结论）。
+# 输入：回复字符串；阶段（规格说明书、首次用例、继续定位、输出结论）。
 # 输出：已写入的相对路径。非法路径不写盘，并记为失败。
+# --verbose 时另按分隔行把回复正文回显到终端，不改变落盘内容。
 #
 # 本机文档写到当前目录下 AIgen-docs/。脚本写到 pipeline/work/ui/。
 # 拒绝 frontend/、backend/、仓库外路径，以及下列手工文档：
@@ -38,9 +39,48 @@ class SplitResult:
         return not self.reason
 
 
-def apply(text: str, stage: str, cfg: Config) -> SplitResult:
-    """stage 取 first、locate、conclude。目录不存在则创建。"""
-    if stage not in {"first", "locate", "conclude"}:
+_LANG = {
+    ".py": "python",
+    ".md": "markdown",
+    ".json": "json",
+    ".js": "javascript",
+    ".jsx": "jsx",
+    ".txt": "text",
+}
+
+
+def echo(text: str) -> None:
+    """按分隔行把回复打到终端。没有分隔行时原文整段打出。"""
+    print("======== 模型回复 ========", flush=True)
+    sections = _sections(text)
+    if not sections:
+        body = text.strip()
+        print(body if body else "（空回复）", flush=True)
+        print("======== 回复结束 ========", flush=True)
+        return
+    first = _MARK.search(text)
+    if first and first.start() > 0:
+        lead = text[: first.start()].strip()
+        if lead:
+            print(lead, flush=True)
+            print(flush=True)
+    for raw_path, body in sections:
+        path = raw_path.strip()
+        shown = _unwrap(body).rstrip("\n")
+        lang = _LANG.get("." + path.rsplit(".", 1)[-1].lower(), "") if "." in path else ""
+        print(f"-------- {path} --------", flush=True)
+        if lang:
+            print(f"```{lang}", flush=True)
+        print(shown if shown else "（空）", flush=True)
+        if lang:
+            print("```", flush=True)
+        print(flush=True)
+    print("======== 回复结束 ========", flush=True)
+
+
+def apply(text: str, stage: str, cfg: Config, keep_cases: bool = False) -> SplitResult:
+    """stage 取 srs、first、locate、conclude。目录不存在则创建。"""
+    if stage not in {"srs", "first", "locate", "conclude"}:
         raise PipelineError(f"未知阶段：{stage}")
     sections = _sections(text)
     result = SplitResult()
@@ -71,7 +111,7 @@ def apply(text: str, stage: str, cfg: Config) -> SplitResult:
         result.written.append(rel)
         print(f"写入 {rel}", flush=True)
 
-    result.reason = _reason(result, stage)
+    result.reason = _reason(result, stage, keep_cases)
     return result
 
 
@@ -112,7 +152,11 @@ def _classify(rel: str, stage: str, cfg: Config) -> str:
         full.relative_to(cfg.repo_root.resolve())
     except ValueError:
         return "路径超出仓库"
+    if stage == "srs" and rel != f"{DOCS_DIR}/需求规格说明书.md":
+        return "discard"
     if stage in {"first", "locate"} and _is_conclusion(rel):
+        return "discard"
+    if stage in {"first", "locate"} and rel == f"{DOCS_DIR}/需求规格说明书.md":
         return "discard"
     if not _allowed(rel, stage, cfg.work_dir):
         return "当前阶段不允许该路径"
@@ -125,6 +169,8 @@ def _is_conclusion(rel: str) -> bool:
 
 def _allowed(rel: str, stage: str, work_dir: str) -> bool:
     work = work_dir.strip("/")
+    if stage == "srs":
+        return rel == f"{DOCS_DIR}/需求规格说明书.md"
     if stage in {"first", "locate"}:
         if stage == "first" and rel == f"{DOCS_DIR}/测试用例.md":
             return True
@@ -156,15 +202,21 @@ def _unwrap(body: str) -> str:
     return text
 
 
-def _reason(result: SplitResult, stage: str) -> str:
+def _reason(result: SplitResult, stage: str, keep_cases: bool = False) -> str:
     lines: list[str] = []
-    if result.discarded:
+    srs_kept = stage == "srs" and f"{DOCS_DIR}/需求规格说明书.md" in result.written
+    if result.discarded and not srs_kept:
         listed = "、".join(result.discarded)
         lines.append(f"已丢弃当前阶段不能写的文档：{listed}")
-        lines.append("请只重发用例和页面脚本。")
+        if stage == "srs":
+            lines.append("请只重发需求规格说明书。")
+        else:
+            lines.append("请只重发用例和页面脚本。")
     if result.rejected:
         lines.append("以下路径未写盘：" + "、".join(result.rejected))
-    if stage == "first" and f"{DOCS_DIR}/测试用例.md" not in result.written:
+    if stage == "srs" and f"{DOCS_DIR}/需求规格说明书.md" not in result.written:
+        lines.append(f"缺少 {DOCS_DIR}/需求规格说明书.md")
+    if stage == "first" and f"{DOCS_DIR}/测试用例.md" not in result.written and not keep_cases:
         lines.append(f"缺少 {DOCS_DIR}/测试用例.md")
     if stage == "locate" and not any(path.endswith(".py") for path in result.written):
         lines.append("继续定位时需要新的页面脚本")

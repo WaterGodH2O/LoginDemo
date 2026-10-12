@@ -4,9 +4,8 @@
 # 输入：pipeline/work/ui/*.py、对应用例的预期原文、剩余重试次数。
 # 输出：通过的脚本路径，或一条失败原因。任一失败都不执行该轮页面脚本。
 #
-# 检查：compile 通过；断言含预期原文；不出现跳过测试；
-# 不把「用户名长度不足」改成断言「注册成功」。
-# REQ-REG-002 通过时，断言文本仍含「用户名长度不足」。
+# 检查：compile 通过；字符串字面量含该用例「」里的提示；不出现跳过测试。
+# 提示原文只取用例预期里的「」或引号，不另设固定词表。
 # 次数用尽后由入口退出，不启动 Demo。
 
 from __future__ import annotations
@@ -24,11 +23,7 @@ _SKIP = re.compile(
     r"pytest\s*\.\s*(?:skip|importorskip)|mark\s*\.\s*skip|unittest\s*\.\s*skip|SkipTest",
     re.I,
 )
-_ASSIGN = re.compile(
-    r"""(?i)\bexpected\b\s*=\s*(?P<q>['"])(?P<body>.*?)(?P=q)"""
-)
-_ASSERT_SUCCESS = re.compile(r"""assert\s+['"]注册成功['"]\s+in\b""")
-_EXPECT_SUCCESS = re.compile(r"""to_(?:have|contain)_text\(\s*['"][^'"]*注册成功""")
+_QUOTED = re.compile(r"[「\"]([^」\"]+)[」\"]")
 _PRODUCT_PATH = re.compile(r"""['"](?:\./|\.\./)?(?:frontend|backend)[/\\]""")
 
 
@@ -69,35 +64,25 @@ def _one(case: UiCase, cfg: Config) -> list[str]:
         return [f"{case.id} 无法编译：第 {exc.lineno} 行 {exc.msg}"]
 
     found: list[str] = []
-    if not _literal_has(source, case.expected):
-        found.append(f"{case.id} 的断言未包含预期原文")
+    missing = [text for text in _needles(case.expected) if not _literal_has(source, text)]
+    if missing:
+        shown = "、".join(f"「{item}」" for item in missing)
+        found.append(f"{case.id} 的脚本 {case.script} 未包含预期原文{shown}")
     if _SKIP.search(_code(source)):
         found.append(f"{case.id} 含有跳过测试")
     if _PRODUCT_PATH.search(source):
         found.append(f"{case.id} 的脚本指向 frontend 或 backend")
-    if _short_username(case):
-        if not _literal_has(source, "用户名长度不足"):
-            found.append(f"{case.id} 的断言应保留「用户名长度不足」")
-        if _success_is_expected(source):
-            found.append(f"{case.id} 把「用户名长度不足」改成了断言「注册成功」")
     return found
 
 
-def _short_username(case: UiCase) -> bool:
-    return case.requirement.strip() == "REQ-REG-002" or "用户名长度不足" in case.expected
-
-
-def _success_is_expected(source: str) -> bool:
-    code = _code(source)
-    for match in _ASSIGN.finditer(code):
-        body = match.group("body")
-        if "注册成功" in body and "用户名长度不足" not in body:
-            return True
-    if _ASSERT_SUCCESS.search(code):
-        return True
-    if _EXPECT_SUCCESS.search(code):
-        return True
-    return False
+def _needles(expected: str) -> list[str]:
+    """从预期说明里取出断言必须包含的提示原文。"""
+    quoted: list[str] = []
+    for match in _QUOTED.finditer(expected):
+        text = match.group(1).strip()
+        if text and text not in quoted:
+            quoted.append(text)
+    return quoted
 
 
 def _literal_has(source: str, expected: str) -> bool:

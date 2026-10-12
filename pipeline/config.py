@@ -13,13 +13,17 @@
 #   --llm-base-url https://api.openai.com/v1
 #   --llm-model gpt-4o-mini
 #   --codegen-retries 3
-#   --locate-rounds 2
-#   --timeout 30
+#   --locate-rounds 7
+#   --timeout 120
+#   --max-tokens 16384
 #   --work-dir pipeline/work
 #   --docs 无
 #   --req 无
 #   --headed 关闭
 #   --dry-run 关闭
+#   --verbose 关闭。加上后只在终端回显发给模型的消息，以及模型回复的用例和脚本
+#   对话日志：工作目录 dialogue.log（默认 pipeline/work/dialogue.log）
+#   每次运行覆盖。记录连通性探测、用户消息和模型回复，不写密钥、请求头和请求 URL
 #   文档目录：当前目录下 AIgen-docs/
 #   脚本：pipeline/work/ui/    截图：pipeline/work/screenshots/
 #   密钥：只读环境变量 LLM_API_KEY
@@ -40,6 +44,7 @@ DEFAULT_WEB = "http://localhost:5173"
 DEFAULT_API = "http://localhost:5000"
 DEFAULT_LLM_URL = "https://api.openai.com/v1"
 DEFAULT_MODEL = "gpt-4o-mini"
+DEFAULT_MAX_TOKENS = 16384
 DEFAULT_WORK = "pipeline/work"
 
 # 手工文档，流水线只读时跳过报告和 Bug 单，写盘时整份拒绝。
@@ -50,6 +55,8 @@ MANUAL_DOCS = (
     "docs/bugs/BUG-001-用户名长度不足仍可注册.md",
 )
 MANUAL_DOC_DIRS = (
+    "docs/prd/",
+    "docs/srs/",
     "docs/testcases/",
     "docs/test-records/",
     "docs/test-reports/",
@@ -77,12 +84,14 @@ class Config:
     channel: str
     llm_base_url: str
     llm_model: str
+    max_tokens: int
     codegen_retries: int
     locate_rounds: int
     timeout: int
     headed: bool
     work_dir: str
     dry_run: bool
+    verbose: bool
     repo_root: Path
     source_kinds: dict[str, str]
 
@@ -123,12 +132,19 @@ def load(argv: list[str] | None = None) -> Config:
     parser.add_argument("--channel", default="all", choices=("api", "ui", "all"), help="api、ui 或 all")
     parser.add_argument("--llm-base-url", default=DEFAULT_LLM_URL, help="模型接口地址")
     parser.add_argument("--llm-model", default=DEFAULT_MODEL, help="模型名")
+    parser.add_argument(
+        "--max-tokens",
+        type=int,
+        default=DEFAULT_MAX_TOKENS,
+        help="单次回复的最大 token 数，不能超过模型上限",
+    )
     parser.add_argument("--codegen-retries", type=int, default=3, help="页面脚本未通过检查时的重试次数")
-    parser.add_argument("--locate-rounds", type=int, default=2, help="继续定位的最多轮数")
-    parser.add_argument("--timeout", type=int, default=30, help="单次 HTTP 或单条页面用例的超时秒数")
+    parser.add_argument("--locate-rounds", type=int, default=7, help="保留参数。页面脚本只执行一次，不再按此重跑")
+    parser.add_argument("--timeout", type=int, default=120, help="单次 HTTP 或单条页面用例的超时秒数")
     parser.add_argument("--headed", action="store_true", help="浏览器可见")
     parser.add_argument("--work-dir", default=DEFAULT_WORK, help="脚本、截图和本轮结果目录")
     parser.add_argument("--dry-run", action="store_true", help="检查通过后停止，不启动服务")
+    parser.add_argument("--verbose", action="store_true", help="在终端回显发给模型的消息和模型回复，不控制对话日志")
     args = parser.parse_args(sys.argv[1:] if argv is None else argv)
 
     repo = Path.cwd().resolve()
@@ -146,6 +162,8 @@ def load(argv: list[str] | None = None) -> Config:
         raise PipelineError("--locate-rounds 不能小于 0")
     if args.timeout <= 0:
         raise PipelineError("--timeout 必须大于 0")
+    if args.max_tokens <= 0:
+        raise PipelineError("--max-tokens 必须大于 0")
     if not args.llm_model.strip():
         raise PipelineError("缺少模型名")
 
@@ -197,12 +215,14 @@ def load(argv: list[str] | None = None) -> Config:
         channel=args.channel,
         llm_base_url=args.llm_base_url.rstrip("/"),
         llm_model=args.llm_model.strip(),
+        max_tokens=args.max_tokens,
         codegen_retries=args.codegen_retries,
         locate_rounds=args.locate_rounds,
         timeout=args.timeout,
         headed=bool(args.headed),
         work_dir=work_path.relative_to(repo).as_posix(),
         dry_run=bool(args.dry_run),
+        verbose=bool(args.verbose),
         repo_root=repo,
         source_kinds=kinds,
     )

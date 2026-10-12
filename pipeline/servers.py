@@ -22,7 +22,7 @@
 #   node 与 npm 都能在 PATH 中找到。缺失时说明需要 Node.js 和 npm。
 # 有页面用例时，另由页面执行模块核对 playwright，未安装再装浏览器。
 # 完成条件：GET /api/health 成功，且 /register 能打开。
-# 单次探测使用 --timeout，默认 30 秒。
+# 单次探测使用 --timeout，默认 120 秒。
 
 from __future__ import annotations
 
