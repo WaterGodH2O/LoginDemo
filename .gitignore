@@ -1,8 +1,15 @@
-# 根目录只追踪 frontend、backend 与 docs
+# 根目录追踪项目目录，不追踪 IDE
 /*
 
 !/frontend/
 !/backend/
 !/docs/
 !/pipeline/
+!/web-demo/
+!/AIgen-docs/
 !/.gitignore
+
+/.cursor/
+/.vscode/
+/.idea/
+*.code-workspace

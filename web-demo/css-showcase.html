@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CSS 能走多远 · 纯 CSS 展示</title>
+  <style>
+    @property --spin {
+      syntax: "<angle>";
+      inherits: false;
+      initial-value: 0deg;
+    }
+
+    @property --glow {
+      syntax: "<number>";
+      inherits: false;
+      initial-value: 0.45;
+    }
+
+    :root {
+      --bg: #07060c;
+      --ink: #f4efe6;
+      --muted: #b7a99a;
+      --a: #67e8f9;
+      --b: #c084fc;
+      --c: #fb7185;
+      --d: #fbbf24;
+      --glass: rgba(255, 255, 255, 0.06);
+      --line: rgba(255, 255, 255, 0.14);
+      --sans: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: var(--sans);
+    }
+
+    body {
+      overflow-x: hidden;
+    }
+
+    /* —— 主题切换：:has() 改整页色相，没有 JS —— */
+    body:has(#mood-neon:checked) {
+      --a: #22d3ee;
+      --b: #f472b6;
+      --c: #a78bfa;
+      --d: #34d399;
+    }
+
+    body:has(#mood-molten:checked) {
+      --a: #fb923c;
+      --b: #f43f5e;
+      --c: #fbbf24;
+      --d: #ea580c;
+    }
+
+    .mood-switch,
+    .tabs-switch,
+    #flip {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 1px;
+      height: 1px;
+      margin: 0;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    /* —— 舞台背景：多层会动的渐变 + 透视网格 —— */
+    .stage {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      overflow: hidden;
+      background: radial-gradient(1200px 700px at 20% -10%, color-mix(in srgb, var(--b) 28%, transparent), transparent 60%),
+                  radial-gradient(900px 500px at 90% 10%, color-mix(in srgb, var(--a) 22%, transparent), transparent 55%),
+                  radial-gradient(700px 500px at 50% 110%, color-mix(in srgb, var(--c) 18%, transparent), transparent 50%),
+                  var(--bg);
+    }
+
+    .aurora {
+      position: absolute;
+      inset: -20%;
+      background:
+        conic-gradient(from var(--spin) at 30% 40%, transparent 0 40%, color-mix(in srgb, var(--a) 35%, transparent) 48%, transparent 56%),
+        conic-gradient(from calc(var(--spin) * -1.4) at 70% 60%, transparent 0 35%, color-mix(in srgb, var(--b) 40%, transparent) 50%, transparent 62%);
+      filter: blur(48px) saturate(1.4);
+      animation: spin-var 18s linear infinite;
+      opacity: 0.85;
+    }
+
+    .noise {
+      position: absolute;
+      inset: 0;
+      background-image: repeating-radial-gradient(circle at 20% 30%, rgba(255,255,255,.035) 0 1px, transparent 1px 3px);
+      mix-blend-mode: overlay;
+      opacity: 0.35;
+      pointer-events: none;
+    }
+
+    .floor {
+      position: absolute;
+      left: -10%;
+      right: -10%;
+      bottom: -18%;
+      height: 48%;
+      background-image:
+        linear-gradient(rgba(255,255,255,.08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.08) 1px, transparent 1px);
+      background-size: 48px 48px;
+      transform: perspective(500px) rotateX(68deg);
+      mask-image: linear-gradient(to top, rgba(0,0,0,.55), transparent 75%);
+      animation: floor-drift 20s linear infinite;
+    }
+
+    .orb {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(18px);
+      mix-blend-mode: screen;
+      animation: drift 14s ease-in-out infinite alternate;
+    }
+
+    .orb-1 { width: 220px; height: 220px; left: 8%; top: 18%; background: color-mix(in srgb, var(--a) 55%, transparent); }
+    .orb-2 { width: 160px; height: 160px; right: 12%; top: 28%; background: color-mix(in srgb, var(--b) 60%, transparent); animation-delay: -4s; }
+    .orb-3 { width: 120px; height: 120px; left: 42%; bottom: 22%; background: color-mix(in srgb, var(--c) 50%, transparent); animation-delay: -8s; }
+
+    @keyframes spin-var {
+      to { --spin: 360deg; }
+    }
+
+    @keyframes floor-drift {
+      to { background-position: 0 48px, 48px 0; }
+    }
+
+    @keyframes drift {
+      from { transform: translate3d(0, 0, 0) scale(1); }
+      to { transform: translate3d(40px, -30px, 0) scale(1.12); }
+    }
+
+    .wrap {
+      width: min(1120px, calc(100% - 36px));
+      margin: 0 auto;
+      padding: 36px 0 80px;
+    }
+
+    /* —— 顶栏 —— */
+    .top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+
+    .back {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.9rem;
+      border: 1px solid var(--line);
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: var(--glass);
+      backdrop-filter: blur(12px);
+    }
+
+    .back:hover { color: var(--ink); border-color: color-mix(in srgb, var(--a) 50%, white); }
+
+    .moods {
+      display: flex;
+      gap: 8px;
+    }
+
+    .moods label {
+      cursor: pointer;
+      font-size: 0.78rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: var(--glass);
+      transition: transform 0.25s, border-color 0.25s, color 0.25s;
+    }
+
+    .moods label:hover { transform: translateY(-1px); }
+
+    body:has(#mood-aurora:checked) .moods label[for="mood-aurora"],
+    body:has(#mood-neon:checked) .moods label[for="mood-neon"],
+    body:has(#mood-molten:checked) .moods label[for="mood-molten"] {
+      color: #061018;
+      background: linear-gradient(135deg, var(--a), var(--b));
+      border-color: transparent;
+    }
+
+    /* —— 标题：渐变裁切 + 扫光 —— */
+    .hero {
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap: 28px;
+      align-items: center;
+      min-height: 52vh;
+    }
+
+    .eyebrow {
+      margin: 0 0 12px;
+      color: var(--a);
+      letter-spacing: 0.22em;
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      text-shadow: 0 0 18px color-mix(in srgb, var(--a) 70%, transparent);
+    }
+
+    h1 {
+      margin: 0 0 16px;
+      font-size: clamp(2.2rem, 6vw, 4.4rem);
+      line-height: 1.05;
+      letter-spacing: -0.04em;
+      background: linear-gradient(100deg, #fff 10%, var(--a) 35%, var(--b) 55%, #fff 80%);
+      background-size: 220% 100%;
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      animation: sheen 7s ease-in-out infinite;
+      filter: drop-shadow(0 10px 30px color-mix(in srgb, var(--b) 35%, transparent));
+    }
+
+    @keyframes sheen {
+      0%, 100% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+    }
+
+    .lede {
+      max-width: 38em;
+      color: var(--muted);
+      font-size: 1.05rem;
+      line-height: 1.7;
+    }
+
+    .lede strong { color: var(--ink); }
+
+    /* —— 3D 立方体 —— */
+    .scene {
+      height: 280px;
+      perspective: 900px;
+      display: grid;
+      place-items: center;
+    }
+
+    .cube {
+      width: 120px;
+      height: 120px;
+      position: relative;
+      transform-style: preserve-3d;
+      transform: rotateX(-18deg) rotateY(32deg);
+      animation: cube-spin 14s linear infinite;
+    }
+
+    .scene:hover .cube { animation-play-state: paused; }
+
+    .face {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      border: 1px solid rgba(255,255,255,.28);
+      background: linear-gradient(160deg, color-mix(in srgb, var(--a) 35%, transparent), color-mix(in srgb, var(--b) 18%, #0b0a12));
+      box-shadow: inset 0 0 40px color-mix(in srgb, var(--a) 22%, transparent);
+      backdrop-filter: blur(6px);
+    }
+
+    .face.front  { transform: translateZ(60px); }
+    .face.back   { transform: rotateY(180deg) translateZ(60px); }
+    .face.right  { transform: rotateY(90deg) translateZ(60px); }
+    .face.left   { transform: rotateY(-90deg) translateZ(60px); }
+    .face.top    { transform: rotateX(90deg) translateZ(60px); }
+    .face.bottom { transform: rotateX(-90deg) translateZ(60px); }
+
+    @keyframes cube-spin {
+      from { transform: rotateX(-18deg) rotateY(32deg); }
+      to { transform: rotateX(342deg) rotateY(392deg); }
+    }
+
+    /* —— 展览区 —— */
+    .gallery {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 18px;
+      margin: 28px 0;
+    }
+
+    .panel {
+      position: relative;
+      border-radius: 24px;
+      padding: 22px;
+      background: var(--glass);
+      border: 1px solid var(--line);
+      backdrop-filter: blur(18px);
+      box-shadow: 0 20px 60px rgba(0,0,0,.28);
+      overflow: hidden;
+    }
+
+    .panel.is-3d {
+      overflow: visible;
+      backdrop-filter: none;
+      background: rgba(0, 0, 0, 0.28);
+    }
+
+    .panel h2 {
+      margin: 0 0 6px;
+      font-size: 1.05rem;
+    }
+
+    .panel p {
+      margin: 0 0 18px;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    /* 旋转霓虹描边：@property 驱动 conic-gradient */
+    .neon {
+      --spin: 0deg;
+      isolation: isolate;
+    }
+
+    .neon::before {
+      content: "";
+      position: absolute;
+      inset: -1px;
+      border-radius: inherit;
+      background: conic-gradient(from var(--spin), var(--a), var(--b), var(--c), var(--d), var(--a));
+      z-index: -2;
+      animation: spin-var 4s linear infinite;
+    }
+
+    .neon::after {
+      content: "";
+      position: absolute;
+      inset: 1px;
+      border-radius: 23px;
+      background: color-mix(in srgb, var(--bg) 82%, black);
+      z-index: -1;
+    }
+
+    /* 液态变形球 */
+    .blob {
+      width: 160px;
+      height: 160px;
+      margin: 12px auto 0;
+      background: linear-gradient(135deg, var(--a), var(--b) 40%, var(--c));
+      border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%;
+      animation: morph 8s ease-in-out infinite, hue 10s linear infinite;
+      filter: blur(0.2px) drop-shadow(0 0 24px color-mix(in srgb, var(--b) 55%, transparent));
+    }
+
+    @keyframes morph {
+      0%, 100% { border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%; transform: rotate(0deg) scale(1); }
+      34% { border-radius: 30% 70% 70% 30% / 30% 52% 48% 70%; transform: rotate(20deg) scale(1.06); }
+      67% { border-radius: 70% 30% 48% 52% / 70% 48% 52% 30%; transform: rotate(-12deg) scale(0.96); }
+    }
+
+    @keyframes hue {
+      to { filter: hue-rotate(60deg) drop-shadow(0 0 24px color-mix(in srgb, var(--a) 55%, transparent)); }
+    }
+
+    /* 太阳系 */
+    .system {
+      position: relative;
+      width: 240px;
+      height: 240px;
+      margin: 8px auto 0;
+    }
+
+    .sun {
+      position: absolute;
+      inset: 50%;
+      width: 36px;
+      height: 36px;
+      margin: -18px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 30%, #fff, var(--d) 45%, var(--c));
+      box-shadow: 0 0 24px var(--d), 0 0 60px color-mix(in srgb, var(--c) 70%, transparent);
+      animation: pulse 2.4s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      50% { transform: scale(1.08); --glow: 0.8; }
+    }
+
+    .orbit {
+      position: absolute;
+      inset: 50%;
+      border: 1px dashed rgba(255,255,255,.15);
+      border-radius: 50%;
+      animation: orbit linear infinite;
+    }
+
+    .orbit-1 { width: 90px; height: 90px; margin: -45px; animation-duration: 7s; animation-delay: -2s; }
+    .orbit-2 { width: 150px; height: 150px; margin: -75px; animation-duration: 12s; animation-delay: -6s; }
+    .orbit-3 { width: 210px; height: 210px; margin: -105px; animation-duration: 18s; animation-delay: -11s; }
+
+    .planet {
+      position: absolute;
+      top: 50%;
+      left: 0;
+      width: 12px;
+      height: 12px;
+      margin: -6px;
+      border-radius: 50%;
+      background: var(--a);
+      box-shadow: 0 0 12px var(--a);
+    }
+
+    .orbit-2 .planet { width: 16px; height: 16px; margin: -8px; background: var(--b); box-shadow: 0 0 14px var(--b); }
+    .orbit-3 .planet { background: var(--c); box-shadow: 0 0 12px var(--c); }
+
+    .moon-wrap {
+      position: absolute;
+      inset: -10px;
+      animation: orbit 3.2s linear infinite;
+    }
+
+    .moon {
+      position: absolute;
+      left: 0;
+      top: 50%;
+      width: 6px;
+      height: 6px;
+      margin-top: -3px;
+      border-radius: 50%;
+      background: #fff;
+    }
+
+    @keyframes orbit {
+      to { transform: rotate(360deg); }
+    }
+
+    /* —— 3D 悬停卡片 —— */
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin: 18px 0 32px;
+      perspective: 1200px;
+    }
+
+    .card {
+      position: relative;
+      min-height: 180px;
+      padding: 22px;
+      border-radius: 20px;
+      background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.03));
+      border: 1px solid var(--line);
+      transform-style: preserve-3d;
+      transition: transform 0.45s cubic-bezier(.2,.8,.2,1), border-color 0.3s;
+      overflow: hidden;
+    }
+
+    .card::before {
+      content: "";
+      position: absolute;
+      inset: -40% auto auto -30%;
+      width: 160px;
+      height: 160px;
+      background: radial-gradient(circle, color-mix(in srgb, var(--a) 50%, transparent), transparent 70%);
+      transition: transform 0.5s;
+    }
+
+    .card:hover {
+      transform: rotateX(8deg) rotateY(-10deg) translateZ(12px);
+      border-color: color-mix(in srgb, var(--a) 55%, white);
+    }
+
+    .card:hover::before { transform: translate(40px, 20px); }
+
+    .card h3 { margin: 0 0 8px; font-size: 1.05rem; }
+    .card p { margin: 0; color: var(--muted); font-size: 0.9rem; }
+
+    .card:nth-child(2)::before { background: radial-gradient(circle, color-mix(in srgb, var(--b) 50%, transparent), transparent 70%); }
+    .card:nth-child(3)::before { background: radial-gradient(circle, color-mix(in srgb, var(--c) 50%, transparent), transparent 70%); }
+
+    /* 扫光按钮 */
+    .shine {
+      display: inline-block;
+      margin-top: 16px;
+      padding: 10px 16px;
+      border-radius: 999px;
+      color: #081016;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--a), var(--b));
+      position: relative;
+      overflow: hidden;
+    }
+
+    .shine::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(115deg, transparent 20%, rgba(255,255,255,.65) 50%, transparent 80%);
+      transform: translateX(-120%);
+      animation: swipe 2.8s ease-in-out infinite;
+    }
+
+    @keyframes swipe {
+      0%, 55% { transform: translateX(-120%); }
+      80%, 100% { transform: translateX(120%); }
+    }
+
+    /* —— 故障字 + 翻转卡（checkbox） —— */
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+
+    .glitch {
+      font-size: clamp(1.6rem, 4vw, 2.4rem);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      position: relative;
+      color: var(--ink);
+    }
+
+    .glitch::before,
+    .glitch::after {
+      content: attr(data-text);
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+    }
+
+    .panel:hover .glitch::before {
+      opacity: 0.8;
+      color: var(--a);
+      transform: translate(-3px, 1px);
+      clip-path: inset(0 0 55% 0);
+      animation: glitch-a 0.35s infinite linear alternate;
+    }
+
+    .panel:hover .glitch::after {
+      opacity: 0.8;
+      color: var(--c);
+      transform: translate(3px, -1px);
+      clip-path: inset(50% 0 0 0);
+      animation: glitch-b 0.28s infinite linear alternate;
+    }
+
+    @keyframes glitch-a {
+      to { transform: translate(3px, -2px); }
+    }
+
+    @keyframes glitch-b {
+      to { transform: translate(-4px, 2px); }
+    }
+
+    .flip-box { perspective: 1000px; }
+
+    .flip {
+      height: 200px;
+      transform-style: preserve-3d;
+      transition: transform 0.8s cubic-bezier(.2,.8,.2,1);
+      cursor: pointer;
+    }
+
+    #flip:checked + label .flip { transform: rotateY(180deg); }
+
+    .flip-face {
+      position: absolute;
+      inset: 0;
+      border-radius: 18px;
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+      display: grid;
+      place-items: center;
+      padding: 20px;
+      text-align: center;
+      border: 1px solid var(--line);
+    }
+
+    .flip-front {
+      background: linear-gradient(160deg, color-mix(in srgb, var(--a) 18%, #111), #111);
+    }
+
+    .flip-back {
+      background: linear-gradient(160deg, color-mix(in srgb, var(--b) 22%, #111), #111);
+      transform: rotateY(180deg);
+    }
+
+    /* —— 选项卡：:has() —— */
+    .tabs {
+      margin-bottom: 28px;
+    }
+
+    .tab-bar {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .tab-bar label {
+      cursor: pointer;
+      padding: 8px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: var(--glass);
+      font-size: 0.88rem;
+    }
+
+    .tab-panels .pane {
+      display: none;
+      padding: 18px 20px;
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      background: rgba(0,0,0,.28);
+      min-height: 120px;
+    }
+
+    .tabs:has(#tab-1:checked) label[for="tab-1"],
+    .tabs:has(#tab-2:checked) label[for="tab-2"],
+    .tabs:has(#tab-3:checked) label[for="tab-3"] {
+      background: linear-gradient(135deg, var(--a), var(--b));
+      color: #081016;
+      border-color: transparent;
+    }
+
+    .tabs:has(#tab-1:checked) .pane-1,
+    .tabs:has(#tab-2:checked) .pane-2,
+    .tabs:has(#tab-3:checked) .pane-3 { display: block; }
+
+    code {
+      font-family: Consolas, "Cascadia Code", monospace;
+      color: var(--a);
+      font-size: 0.85em;
+    }
+
+    /* —— 无限滚动字幕 —— */
+    .marquee {
+      overflow: hidden;
+      mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+      margin: 10px 0 36px;
+    }
+
+    .track {
+      display: flex;
+      gap: 28px;
+      width: max-content;
+      animation: marquee 18s linear infinite;
+      font-size: 0.92rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: color-mix(in srgb, var(--ink) 70%, var(--a));
+    }
+
+    .track span {
+      white-space: nowrap;
+      opacity: 0.85;
+    }
+
+    @keyframes marquee {
+      to { transform: translateX(-50%); }
+    }
+
+    /* clip-path 揭示 */
+    .reveal {
+      display: grid;
+      place-items: center;
+      min-height: 140px;
+      font-weight: 800;
+      font-size: 1.6rem;
+      letter-spacing: 0.2em;
+      background: linear-gradient(90deg, var(--a), var(--b), var(--c));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      animation: reveal 4.5s ease-in-out infinite;
+    }
+
+    @keyframes reveal {
+      0%, 12% { clip-path: inset(0 100% 0 0); }
+      40%, 62% { clip-path: inset(0 0 0 0); }
+      88%, 100% { clip-path: inset(0 0 0 100%); }
+    }
+
+    .note {
+      color: var(--muted);
+      font-size: 0.88rem;
+      line-height: 1.7;
+    }
+
+    .note em { color: var(--ink); font-style: normal; }
+
+    @media (max-width: 860px) {
+      .hero, .gallery, .cards, .row {
+        grid-template-columns: 1fr;
+      }
+      .scene { height: 220px; }
+    }
+  </style>
+</head>
+<body>
+  <input class="mood-switch" type="radio" name="mood" id="mood-aurora" checked>
+  <input class="mood-switch" type="radio" name="mood" id="mood-neon">
+  <input class="mood-switch" type="radio" name="mood" id="mood-molten">
+
+  <div class="stage" aria-hidden="true">
+    <div class="aurora"></div>
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+    <div class="floor"></div>
+    <div class="noise"></div>
+  </div>
+
+  <div class="wrap">
+    <div class="top">
+      <a class="back" href="index.html">← 回到教学页</a>
+      <div class="moods">
+        <label for="mood-aurora">极光</label>
+        <label for="mood-neon">霓虹</label>
+        <label for="mood-molten">熔金</label>
+      </div>
+    </div>
+
+    <header class="hero">
+      <div>
+        <p class="eyebrow">0 JavaScript · 全是预定义渲染指令</p>
+        <h1>CSS 能走多远</h1>
+        <p class="lede">
+          没有新的绘制原语，只有组合：<strong>渐变、3D 变换、关键帧、滤镜、裁切、伪元素</strong>
+          和 <strong>:hover / :checked / :has()</strong>。点右上角换主题，整页色相会跟着变——仍然没有脚本。
+        </p>
+      </div>
+      <div class="scene" title="悬停暂停">
+        <div class="cube">
+          <div class="face front">光</div>
+          <div class="face back">影</div>
+          <div class="face right">动</div>
+          <div class="face left">画</div>
+          <div class="face top">3D</div>
+          <div class="face bottom">CSS</div>
+        </div>
+      </div>
+    </header>
+
+    <div class="marquee" aria-hidden="true">
+      <div class="track">
+        <span>@property</span><span>conic-gradient</span><span>preserve-3d</span><span>backdrop-filter</span>
+        <span>clip-path</span><span>mix-blend-mode</span><span>:has()</span><span>background-clip:text</span>
+        <span>transform-style</span><span>filter</span><span>mask-image</span><span>animation</span>
+        <span>@property</span><span>conic-gradient</span><span>preserve-3d</span><span>backdrop-filter</span>
+        <span>clip-path</span><span>mix-blend-mode</span><span>:has()</span><span>background-clip:text</span>
+        <span>transform-style</span><span>filter</span><span>mask-image</span><span>animation</span>
+      </div>
+    </div>
+
+    <section class="gallery">
+      <article class="panel neon">
+        <h2>液态变形 · border-radius 关键帧</h2>
+        <p>CSS 没有「流体」指令，但可以让圆角四个值各自呼吸，再叠一层 hue-rotate。</p>
+        <div class="blob"></div>
+      </article>
+      <article class="panel">
+        <h2>太阳系 · 嵌套旋转</h2>
+        <p>父元素转轨道，子元素再转月球。全是 <code>transform: rotate()</code>。</p>
+        <div class="system">
+          <div class="sun"></div>
+          <div class="orbit orbit-1"><span class="planet"></span></div>
+          <div class="orbit orbit-2">
+            <span class="planet">
+              <span class="moon-wrap"><span class="moon"></span></span>
+            </span>
+          </div>
+          <div class="orbit orbit-3"><span class="planet"></span></div>
+        </div>
+      </article>
+    </section>
+
+    <section class="cards">
+      <article class="card">
+        <h3>透视悬停</h3>
+        <p>rotateX / rotateY / translateZ。卡片不是 3D 模型，只是一个矩形在假装有厚度。</p>
+      </article>
+      <article class="card">
+        <h3>玻璃拟态</h3>
+        <p>半透明底 + backdrop-filter: blur。背后极光被磨砂，这是滤镜，不是新图层类型。</p>
+      </article>
+      <article class="card">
+        <h3>扫光按钮</h3>
+        <p>伪元素上的斜向渐变周期性横穿。下面这颗「按钮」也不是组件，是 span。</p>
+        <span class="shine">纯 CSS</span>
+      </article>
+    </section>
+
+    <section class="row">
+      <article class="panel">
+        <h2>故障字 · clip-path + 伪元素</h2>
+        <p>把同一段字复制到 ::before / ::after，切开再错位。把鼠标移到这块面板上。</p>
+        <p class="glitch" data-text="PREDEFINED">PREDEFINED</p>
+      </article>
+      <article class="panel is-3d">
+        <h2>翻转卡 · checkbox 黑客</h2>
+        <p>点卡片翻转。状态存在 <code>:checked</code> 里，不是变量、不是脚本。</p>
+        <input type="checkbox" id="flip">
+        <label class="flip-box" for="flip">
+          <div class="flip">
+            <div class="flip-face flip-front">正面：点我翻转</div>
+            <div class="flip-face flip-back">背面：还是 CSS<br>input:checked + label</div>
+          </div>
+        </label>
+      </article>
+    </section>
+
+    <section class="tabs">
+      <input class="tabs-switch" type="radio" name="tab" id="tab-1" checked>
+      <input class="tabs-switch" type="radio" name="tab" id="tab-2">
+      <input class="tabs-switch" type="radio" name="tab" id="tab-3">
+      <div class="tab-bar">
+        <label for="tab-1">光影</label>
+        <label for="tab-2">结构</label>
+        <label for="tab-3">极限</label>
+      </div>
+      <div class="tab-panels">
+        <div class="pane pane-1">
+          背景那团会转的光，靠 <code>@property --spin</code> 让角度能被动画驱动，再喂给 <code>conic-gradient(from var(--spin))</code>。
+          普通自定义属性不能直接插值角度，这个注册语法是现代 CSS 才有的「预定义能力升级」。
+        </div>
+        <div class="pane pane-2">
+          选项卡本身也是 CSS：隐藏的 radio + <code>:has(#tab-2:checked)</code> 决定显示哪一块。
+          HTML 仍然只提供结构（三个面板都在），CSS 负责显隐，没有 <code>display</code> 之外的逻辑。
+        </div>
+        <div class="pane pane-3">
+          做不到的：发请求、记住用户、随机数、物理引擎、逐像素画画。
+          再花哨也是在浏览器已经实现的绘制指令里组合。这就是上一问的结论的现场版。
+        </div>
+      </div>
+    </section>
+
+    <div class="panel">
+      <div class="reveal">CLIP-PATH</div>
+      <p class="note">
+        这个页面<strong>没有 JavaScript</strong>。用到的都是规范里已有的操作：
+        渐变、网格透视、混合模式、3D 变换、关键帧、滤镜、遮罩、裁切、伪元素，以及 <em>:hover / :checked / :has()</em>。
+        花哨来自组合密度，不是发明了新的渲染器。
+      </p>
+    </div>
+  </div>
+</body>
+</html>

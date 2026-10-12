@@ -1,0 +1,3 @@
+{
+  "message": "这段文字来自 data.json，是 fetch 拿到之后写进 DOM 的，不是 HTML 里写死的。"
+}

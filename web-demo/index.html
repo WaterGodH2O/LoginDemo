@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>网页是怎么显示的 · 示例</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="hero">
+    <p class="eyebrow">本地示例 · HTML + CSS + JavaScript</p>
+    <h1>网页显示过程里发生了什么</h1>
+    <p class="lede">
+      浏览器先把 HTML 变成一棵可修改的 <strong>DOM 树</strong>，再用 CSS 决定外观，最后画到屏幕上。
+      JavaScript 不直接画像素，它读写 DOM、监听事件，屏幕跟着变。
+    </p>
+    <p class="hint">建议同时打开开发者工具（<kbd>F12</kbd>）→ Elements，对照右侧实验区。</p>
+  </header>
+
+  <section class="section" id="roles">
+    <h2>1. 三种文件，三种角色</h2>
+    <p class="section-desc">这个示例本身就是三份文件：<code>index.html</code> 结构、<code>style.css</code> 外观、<code>app.js</code> 行为。</p>
+    <div class="role-grid">
+      <button type="button" class="role-card is-html is-active" data-role="html">
+        <span class="role-tag">结构</span>
+        <h3>HTML</h3>
+        <p>房间清单：有哪些标题、按钮、列表。解析后变成 DOM 节点。</p>
+      </button>
+      <button type="button" class="role-card is-css" data-role="css">
+        <span class="role-tag">外观</span>
+        <h3>CSS</h3>
+        <p>装修规则：颜色、间距、排版。关掉它，结构还在，只是变回“素颜”。</p>
+      </button>
+      <button type="button" class="role-card is-js" data-role="js">
+        <span class="role-tag">行为</span>
+        <h3>JavaScript</h3>
+        <p>遥控器：找到节点、改文字、加节点、听点击。改的是内存里的树。</p>
+      </button>
+    </div>
+    <pre class="role-snippet" id="role-snippet" aria-live="polite"></pre>
+  </section>
+
+  <section class="section" id="pipeline">
+    <h2>2. 从请求到画上屏幕</h2>
+    <p class="section-desc">点「播放过程」，按真实顺序点亮每一步。点某一步可看说明。</p>
+    <div class="pipeline-toolbar">
+      <button type="button" class="btn btn-primary" id="play-pipeline">播放过程</button>
+      <button type="button" class="btn" id="reset-pipeline">复位</button>
+    </div>
+    <ol class="pipeline" id="pipeline-list">
+      <li class="pipe-step is-current" data-step="0">
+        <span class="pipe-num">1</span>
+        <span class="pipe-name">请求 HTML</span>
+      </li>
+      <li class="pipe-step" data-step="1">
+        <span class="pipe-num">2</span>
+        <span class="pipe-name">解析成 DOM</span>
+      </li>
+      <li class="pipe-step" data-step="2">
+        <span class="pipe-num">3</span>
+        <span class="pipe-name">下载 CSS / JS</span>
+      </li>
+      <li class="pipe-step" data-step="3">
+        <span class="pipe-num">4</span>
+        <span class="pipe-name">合成渲染树</span>
+      </li>
+      <li class="pipe-step" data-step="4">
+        <span class="pipe-num">5</span>
+        <span class="pipe-name">Layout 排版</span>
+      </li>
+      <li class="pipe-step" data-step="5">
+        <span class="pipe-num">6</span>
+        <span class="pipe-name">Paint 绘制</span>
+      </li>
+    </ol>
+    <p class="pipeline-note" id="pipeline-note"></p>
+  </section>
+
+  <section class="section" id="lab">
+    <h2>3. JS 和页面如何交互</h2>
+    <p class="section-desc">左边是真实 DOM（可以改），右边是根据它现场画出来的树。改左边，右边会同步。</p>
+    <div class="lab-grid">
+      <div class="panel">
+        <div class="panel-head">
+          <h3>迷你页面</h3>
+          <label class="toggle">
+            <input type="checkbox" id="css-toggle" checked>
+            应用 CSS
+          </label>
+        </div>
+        <div class="mini-frame" id="mini-frame">
+          <article class="mini-page" id="mini-page">
+            <h2 id="mini-title">你好</h2>
+            <p id="mini-text">这是写在 HTML 里的一段话。</p>
+            <ul id="mini-list">
+              <li>第一项</li>
+            </ul>
+          </article>
+        </div>
+        <div class="actions">
+          <button type="button" class="btn" id="btn-text">改标题文字</button>
+          <button type="button" class="btn" id="btn-color">改标题颜色</button>
+          <button type="button" class="btn" id="btn-add">添加一项</button>
+          <button type="button" class="btn" id="btn-remove">删除末项</button>
+          <button type="button" class="btn" id="btn-delay">1 秒后改正文</button>
+          <button type="button" class="btn" id="btn-fetch">从 data.json 加载</button>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head">
+          <h3>实时 DOM 树</h3>
+          <span class="muted">来自 <code>mini-page</code>，不是静态图片</span>
+        </div>
+        <pre class="tree" id="dom-tree"></pre>
+        <p class="muted tree-caption">对应 JS：<code>document.querySelector('#mini-page')</code></p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="events">
+    <h2>4. 事件：点击如何传到 JS</h2>
+    <p class="section-desc">点最里面的盒子。事件默认会从内向外<strong>冒泡</strong>，三层监听器都会跑。勾选「阻止冒泡」后，外层就收不到了。</p>
+    <label class="toggle event-toggle">
+      <input type="checkbox" id="stop-bubble">
+      内层点击时阻止冒泡
+    </label>
+    <div class="bubble-stage">
+      <div class="bubble outer" id="bubble-outer">
+        外层 <code>#bubble-outer</code>
+        <div class="bubble middle" id="bubble-middle">
+          中层 <code>#bubble-middle</code>
+          <div class="bubble inner" id="bubble-inner">
+            内层 · 点我
+          </div>
+        </div>
+      </div>
+    </div>
+    <ol class="event-log" id="event-log"></ol>
+  </section>
+
+  <section class="section" id="console">
+    <h2>5. JS 刚刚做了什么</h2>
+    <p class="section-desc">下面是本页脚本实际执行过的语句，方便对照代码。</p>
+    <pre class="js-log" id="js-log"></pre>
+  </section>
+
+  <footer class="foot">
+    <p>文件：<code>web-demo/index.html</code> · <code>style.css</code> · <code>app.js</code> · <code>data.json</code></p>
+    <p>脚本放在 <code>&lt;/body&gt;</code> 之前，这样执行时上面的 DOM 已经建好，不必再等 <code>DOMContentLoaded</code>。</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
